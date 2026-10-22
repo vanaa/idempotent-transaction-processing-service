@@ -1,0 +1,129 @@
+### Variables
+@baseUrl = http://localhost:8080
+@accountId = acc-demo
+
+### 1. Submit a first credit (expect HTTP 202; poll the record to see final status)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+
+{
+  "transactionId": "tx-demo-001",
+  "accountId": "{{accountId}}",
+  "transactionType": "CREDIT",
+  "amount": 100.00,
+  "currency": "INR",
+  "sequenceNumber": 1,
+  "idempotencyKey": "idem-demo-001"
+}
+
+### 2. Replay the exact same request (expect the original transaction; no second balance effect)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+
+{
+  "transactionId": "tx-demo-001",
+  "accountId": "{{accountId}}",
+  "transactionType": "CREDIT",
+  "amount": 100.00,
+  "currency": "INR",
+  "sequenceNumber": 1,
+  "idempotencyKey": "idem-demo-001"
+}
+
+### 3. Reuse the key with a different payload (expect HTTP 409)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+
+{
+  "transactionId": "tx-demo-002",
+  "accountId": "{{accountId}}",
+  "transactionType": "CREDIT",
+  "amount": 200.00,
+  "currency": "INR",
+  "sequenceNumber": 2,
+  "idempotencyKey": "idem-demo-001"
+}
+
+### 4. Submit sequence 3 before sequence 2 (expect PENDING_SEQUENCE initially)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+
+{
+  "transactionId": "tx-demo-003",
+  "accountId": "{{accountId}}",
+  "transactionType": "CREDIT",
+  "amount": 50.00,
+  "currency": "INR",
+  "sequenceNumber": 3,
+  "idempotencyKey": "idem-demo-003"
+}
+
+### 5. Fill sequence 2 (then poll tx-demo-002 and tx-demo-003)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+
+{
+  "transactionId": "tx-demo-002",
+  "accountId": "{{accountId}}",
+  "transactionType": "CREDIT",
+  "amount": 25.00,
+  "currency": "INR",
+  "sequenceNumber": 2,
+  "idempotencyKey": "idem-demo-002"
+}
+
+### 6. Simulate two transient failures (expect eventual PROCESSED with attempts 3)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+
+{
+  "transactionId": "tx-demo-004",
+  "accountId": "acc-retry",
+  "transactionType": "CREDIT",
+  "amount": 10.00,
+  "currency": "INR",
+  "sequenceNumber": 1,
+  "idempotencyKey": "idem-demo-004",
+  "simulatedTransientFailureCount": 2
+}
+
+### 7. Exhaust retries (expect eventual FAILED after 3 attempts)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+
+{
+  "transactionId": "tx-demo-005",
+  "accountId": "acc-retry-failed",
+  "transactionType": "CREDIT",
+  "amount": 10.00,
+  "currency": "INR",
+  "sequenceNumber": 1,
+  "idempotencyKey": "idem-demo-005",
+  "simulatedTransientFailureCount": 3
+}
+
+### 8. Invalid amount (expect HTTP 400 with validation details)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+
+{
+  "transactionId": "tx-invalid-001",
+  "accountId": "acc-invalid",
+  "transactionType": "CREDIT",
+  "amount": -1.00,
+  "currency": "INR",
+  "sequenceNumber": 1,
+  "idempotencyKey": "idem-invalid-001"
+}
+
+### Inspect a transaction (replace ID as needed)
+GET {{baseUrl}}/api/transactions/tx-demo-001
+
+### List transactions
+GET {{baseUrl}}/api/transactions
+
+### Inspect balance
+GET {{baseUrl}}/api/accounts/{{accountId}}/balance
+
+### Inspect processing summary
+GET {{baseUrl}}/api/operations/summary
